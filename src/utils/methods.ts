@@ -2,7 +2,6 @@ import { client } from "./client";
 import { ANILIST_BASEURL, ANIME_QUERY, HIANIME_BASEURL } from "./constant";
 import { load } from "cheerio";
 import match from "string-similarity-js";
-import { Megacloud } from "../extractors/megacloud";
 
 // fetchAnilistInfo and call hianmie endpoints and return info with eps from hianime
 export const fetchAnilistInfo = async (id: number) => {
@@ -22,16 +21,6 @@ export const fetchAnilistInfo = async (id: number) => {
 
     const eps = await searchNScrapeEPs(data.title);
     infoWithEp = {
-      ...data,
-      recommendations: data.recommendations.edges.map(
-        (el) => el.node.mediaRecommendation
-      ),
-      relations: data.relations.edges.map((el) => ({ id: el.id, ...el.node })),
-      characters: data.characters.edges.map((el) => ({
-        role: el.role,
-        ...el.node,
-        voiceActors: el.voiceActors,
-      })),
       episodesList: eps,
     };
 
@@ -113,76 +102,5 @@ export const getEpisodes = async (animeId: string) => {
   } catch (err) {
     console.error(err);
     return { episodesList: null };
-  }
-};
-
-// call server to get ep servers
-export const getServers = async (epId: string) => {
-  try {
-    const resp = await client(
-      `${HIANIME_BASEURL}/ajax/v2/episode/servers?episodeId=${epId}`,
-      {
-        headers: {
-          "X-Requested-With": "XMLHttpRequest",
-          referer: `${HIANIME_BASEURL}/watch/${epId}`,
-        },
-      }
-    );
-
-    const $ = load(resp.data.html);
-
-    let servers: {
-      sub: { serverId: string | null; serverName: string }[];
-      dub: { serverId: string | null; serverName: string }[];
-    } = {
-      sub: [],
-      dub: [],
-    };
-
-    $(".ps_-block.ps_-block-sub .ps__-list .server-item").each((i, el) => {
-      const $parent = $(el).closest(".servers-sub, .servers-dub");
-      const serverType = $parent.hasClass("servers-sub") ? "sub" : "dub";
-      servers[serverType].push({
-        serverId: $(el).attr("data-id") ?? null,
-        serverName: $(el).text().replaceAll("\n", "").trim(),
-      });
-    });
-
-    return servers;
-  } catch (err) {
-    console.error(err);
-    return { servers: null };
-  }
-};
-
-// get sources of ep
-export const getSources = async (serverId: string, epId: string) => {
-  try {
-    const res = await client(
-      `${HIANIME_BASEURL}/ajax/v2/episode/sources?id=${serverId}`,
-      {
-        headers: {
-          "X-Requested-With": "XMLHttpRequest",
-          referer: `${HIANIME_BASEURL}/watch/${epId}`,
-        },
-      }
-    );
-
-    const link = res.data.link;
-    if (!link) return { sources: null };
-
-    let sources!: Sourcedata | { sources: null };
-    if (String(link).includes("megacloud"))
-      sources = await new Megacloud(res.data.link).scrapeMegaCloud();
-    else if (String(link).includes("watchsb")) sources = { sources: null };
-    else if (String(link).includes("streamtape")) sources = { sources: null };
-    else {
-      sources = { sources: null };
-      console.log("Unknown link !");
-    }
-    return sources;
-  } catch (err) {
-    console.error(err);
-    return { sources: null };
   }
 };
